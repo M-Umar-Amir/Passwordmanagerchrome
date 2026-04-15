@@ -88,8 +88,25 @@
     const btn = createAutofillButton();
     document.body.appendChild(btn);
 
-    // Cache credentials fetched on focus so the click handler reuses them
-    let cachedEntries = null;
+    // Cache credentials fetched on focus with a 30-second TTL to stay fresh
+    // if the vault is updated while the page remains open.
+    const CACHE_TTL_MS = 30_000;
+    let cachedEntries  = null;
+    let cacheTimestamp = 0;
+
+    async function fetchEntries() {
+      const now = Date.now();
+      if (cachedEntries && now - cacheTimestamp < CACHE_TTL_MS) {
+        return cachedEntries;
+      }
+      const response = await chrome.runtime.sendMessage({
+        action: "getCredentialsForUrl",
+        url:    window.location.href,
+      }).catch(() => null);
+      cachedEntries  = response?.entries ?? null;
+      cacheTimestamp = now;
+      return cachedEntries;
+    }
 
     // Position on focus
     pwField.addEventListener("focus", async () => {
@@ -97,14 +114,8 @@
       btn.style.display = "block";
 
       // Only show the button if we actually have matching credentials
-      const response = await chrome.runtime.sendMessage({
-        action: "getCredentialsForUrl",
-        url:    window.location.href,
-      }).catch(() => null);
-
-      cachedEntries = response?.entries ?? null;
-
-      if (!cachedEntries?.length) {
+      const entries = await fetchEntries();
+      if (!entries?.length) {
         btn.style.display = "none";
       }
     });
@@ -115,14 +126,7 @@
     });
 
     btn.addEventListener("click", async () => {
-      // Use cached entries from the focus event; re-fetch only if the cache is empty
-      const entries = cachedEntries?.length
-        ? cachedEntries
-        : (await chrome.runtime.sendMessage({
-            action: "getCredentialsForUrl",
-            url:    window.location.href,
-          }).catch(() => null))?.entries;
-
+      const entries = await fetchEntries();
       if (!entries?.length) return;
 
       // Use the first matching credential

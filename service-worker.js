@@ -177,12 +177,12 @@ async function resetAttempts() {
  * Avoids the modulo bias that occurs when 2^32 is not a multiple of `max`.
  */
 function unbiasedRandom(max) {
-  // Largest multiple of `max` that fits in a Uint32 (exclusive upper bound)
-  const limit = Math.floor(0x1_0000_0000 / max) * max;
+  // Largest multiple of `max` that fits in a Uint32 (exclusive upper bound for rejection)
+  const rejectionThreshold = Math.floor(0x1_0000_0000 / max) * max;
   let val;
   do {
     val = crypto.getRandomValues(new Uint32Array(1))[0];
-  } while (val >= limit);
+  } while (val >= rejectionThreshold);
   return val % max;
 }
 
