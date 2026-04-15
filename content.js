@@ -88,6 +88,9 @@
     const btn = createAutofillButton();
     document.body.appendChild(btn);
 
+    // Cache credentials fetched on focus so the click handler reuses them
+    let cachedEntries = null;
+
     // Position on focus
     pwField.addEventListener("focus", async () => {
       positionButton(btn, pwField);
@@ -99,7 +102,9 @@
         url:    window.location.href,
       }).catch(() => null);
 
-      if (!response?.entries?.length) {
+      cachedEntries = response?.entries ?? null;
+
+      if (!cachedEntries?.length) {
         btn.style.display = "none";
       }
     });
@@ -110,15 +115,18 @@
     });
 
     btn.addEventListener("click", async () => {
-      const response = await chrome.runtime.sendMessage({
-        action: "getCredentialsForUrl",
-        url:    window.location.href,
-      }).catch(() => null);
+      // Use cached entries from the focus event; re-fetch only if the cache is empty
+      const entries = cachedEntries?.length
+        ? cachedEntries
+        : (await chrome.runtime.sendMessage({
+            action: "getCredentialsForUrl",
+            url:    window.location.href,
+          }).catch(() => null))?.entries;
 
-      if (!response?.entries?.length) return;
+      if (!entries?.length) return;
 
       // Use the first matching credential
-      const cred = response.entries[0];
+      const cred = entries[0];
       const usernameField = findUsernameField(pwField);
       if (usernameField) {
         usernameField.value = cred.username;

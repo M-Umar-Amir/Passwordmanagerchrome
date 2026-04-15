@@ -70,7 +70,7 @@ const detailUsername  = $("detail-username");
 const detailPassword  = $("detail-password");
 const toggleDetailPw  = $("toggle-detail-pw");
 const copyDetailPwBtn = $("copy-detail-pw-btn");
-const deleteCreditBtn = $("delete-credential-btn");
+const deleteCredentialBtn = $("delete-credential-btn");
 const closeModalBtn   = $("close-modal-btn");
 
 // ─── State ────────────────────────────────────────────────────────────────────
@@ -247,7 +247,7 @@ copyDetailPwBtn.addEventListener("click", async () => {
   setTimeout(() => { copyDetailPwBtn.textContent = "📋 Copy"; }, 1500);
 });
 
-deleteCreditBtn.addEventListener("click", async () => {
+deleteCredentialBtn.addEventListener("click", async () => {
   if (!activeEntryId) return;
   await sendMsg({ action: "deleteCredential", id: activeEntryId });
   hide(detailModal);

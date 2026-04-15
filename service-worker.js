@@ -2,7 +2,7 @@
  * Service Worker (Background Script) - Manifest V3
  *
  * Responsibilities:
- *  - PBKDF2 key derivation from master password (600 000 iterations, SHA-256)
+ *  - PBKDF2 key derivation from master password (600,000 iterations, SHA-256)
  *  - AES-256-GCM encryption / decryption of the vault
  *  - Holding the session key in chrome.storage.session (cleared on browser close)
  *  - Responding to messages from popup.js and content.js
@@ -172,6 +172,20 @@ async function resetAttempts() {
 
 // ─── Password generator ───────────────────────────────────────────────────────
 
+/**
+ * Return an unbiased random integer in [0, max) using rejection sampling.
+ * Avoids the modulo bias that occurs when 2^32 is not a multiple of `max`.
+ */
+function unbiasedRandom(max) {
+  // Largest multiple of `max` that fits in a Uint32 (exclusive upper bound)
+  const limit = Math.floor(0x1_0000_0000 / max) * max;
+  let val;
+  do {
+    val = crypto.getRandomValues(new Uint32Array(1))[0];
+  } while (val >= limit);
+  return val % max;
+}
+
 function generatePassword(length = 16) {
   const upper   = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
   const lower   = "abcdefghijklmnopqrstuvwxyz";
@@ -179,23 +193,23 @@ function generatePassword(length = 16) {
   const special = "!@#$%^&*()-_=+[]{}|;:,.<>?";
   const all     = upper + lower + digits + special;
 
-  // Guarantee at least one character of each category
+  // Guarantee at least one character of each category (unbiased)
   const required = [
-    upper  [crypto.getRandomValues(new Uint32Array(1))[0] % upper.length],
-    lower  [crypto.getRandomValues(new Uint32Array(1))[0] % lower.length],
-    digits [crypto.getRandomValues(new Uint32Array(1))[0] % digits.length],
-    special[crypto.getRandomValues(new Uint32Array(1))[0] % special.length],
+    upper  [unbiasedRandom(upper.length)],
+    lower  [unbiasedRandom(lower.length)],
+    digits [unbiasedRandom(digits.length)],
+    special[unbiasedRandom(special.length)],
   ];
 
   const remaining = Array.from(
-    crypto.getRandomValues(new Uint32Array(length - 4)),
-    v => all[v % all.length]
+    { length: length - 4 },
+    () => all[unbiasedRandom(all.length)]
   );
 
-  // Shuffle result using Fisher-Yates
+  // Shuffle result using Fisher-Yates (unbiased)
   const result = [...required, ...remaining];
   for (let i = result.length - 1; i > 0; i--) {
-    const j = crypto.getRandomValues(new Uint32Array(1))[0] % (i + 1);
+    const j = unbiasedRandom(i + 1);
     [result[i], result[j]] = [result[j], result[i]];
   }
   return result.join("");
@@ -278,7 +292,7 @@ async function handleMessage(message) {
             failedAttempts: newAttempts,
             lockedUntil:    Date.now() + LOCKOUT_MS,
           });
-          return { success: false, error: `Too many attempts. Locked for 60 seconds.` };
+          return { success: false, error: `Too many attempts. Locked for ${Math.ceil(LOCKOUT_MS / 1000)} seconds.` };
         }
         await setAttemptData({ failedAttempts: newAttempts, lockedUntil: 0 });
         return { success: false, error: `Incorrect master password. ${MAX_ATTEMPTS - newAttempts} attempt(s) remaining.` };
